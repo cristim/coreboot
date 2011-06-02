@@ -95,17 +95,17 @@ unsigned long acpi_fill_ssdt_generator(unsigned long current, const char *oem_ta
 unsigned long write_acpi_tables(unsigned long start)
 {
 	unsigned long current;
-	acpi_rsdp_t *rsdp;
-	acpi_srat_t *srat;
-	acpi_rsdt_t *rsdt;
-	acpi_mcfg_t *mcfg;
-	acpi_hpet_t *hpet;
-	acpi_madt_t *madt;
-	acpi_fadt_t *fadt;
-	acpi_facs_t *facs;
-	acpi_slit_t *slit;
-	acpi_header_t *ssdt;
-	acpi_header_t *dsdt;
+	acpi_rsdp_t *rsdp = NULL;
+	acpi_srat_t *srat = NULL;
+	acpi_rsdt_t *rsdt = NULL;
+	acpi_mcfg_t *mcfg = NULL;
+	acpi_hpet_t *hpet = NULL;
+	acpi_madt_t *madt = NULL;
+	acpi_fadt_t *fadt = NULL;
+	acpi_facs_t *facs = NULL;
+	acpi_slit_t *slit = NULL;
+	acpi_header_t *ssdt = NULL;
+	acpi_header_t *dsdt = NULL;
 
 	/* Align ACPI tables to 16 byte. */
 	start = (start + 0x0f) & -0x10;
@@ -125,71 +125,20 @@ unsigned long write_acpi_tables(unsigned long start)
 	acpi_write_rsdp(rsdp, rsdt, NULL);
 	acpi_write_rsdt(rsdt);
 
-	/* We explicitly add these tables later on: */
-	printk(BIOS_DEBUG, "ACPI:     * FACS\n");
+	acpi_write_dsdt(dsdt, AmlCode , &current);
+	acpi_write_facs(facs, &current);
+	acpi_write_fadt(fadt, facs, dsdt, rsdp, &current);
+	acpi_write_hpet(hpet, rsdp, &current);
 
-	/* we should align FACS to 64B as per ACPI specs */
+	/* If we want to use HPET Timers Linux wants an MADT */
+	acpi_write_madt(madt, rsdp, &current);
 
-	current = ALIGN(current, 64);
-	facs = (acpi_facs_t *) current;
-	current += sizeof(acpi_facs_t);
-	acpi_create_facs(facs);
+	acpi_write_mcfg(mcfg, rsdp, &current);
 
-	dsdt = (acpi_header_t *) current;
-	memcpy(dsdt, &AmlCode, sizeof(acpi_header_t));
-	current += dsdt->length;
-	memcpy(dsdt, &AmlCode, dsdt->length);
-	dsdt->checksum = 0;	/* Don't trust iasl to get this right. */
-	dsdt->checksum = acpi_checksum((u8*)dsdt, dsdt->length);
-	printk(BIOS_DEBUG, "ACPI:     * DSDT @ %p Length %x\n", dsdt,
-		     dsdt->length);
-	printk(BIOS_DEBUG, "ACPI:     * FADT\n");
+	acpi_write_srat(srat, rsdp, &current);
+	acpi_write_slit(slit, rsdp, &current);
 
-	fadt = (acpi_fadt_t *) current;
-	current += sizeof(acpi_fadt_t);
-
-	acpi_create_fadt(fadt, facs, dsdt);
-	acpi_add_table(rsdp, fadt);
-
-	printk(BIOS_DEBUG, "ACPI:    * HPET\n");
-	hpet = (acpi_hpet_t *) current;
-	current += sizeof(acpi_hpet_t);
-	acpi_create_hpet(hpet);
-	acpi_add_table(rsdp, hpet);
-
-	/* If we want to use HPET timers Linux wants an MADT. */
-	printk(BIOS_DEBUG, "ACPI:    * MADT\n");
-	madt = (acpi_madt_t *) current;
-	acpi_create_madt(madt);
-	current += madt->header.length;
-	acpi_add_table(rsdp, madt);
-
-	printk(BIOS_DEBUG, "ACPI:    * MCFG\n");
-	mcfg = (acpi_mcfg_t *) current;
-	acpi_create_mcfg(mcfg);
-	current += mcfg->header.length;
-	acpi_add_table(rsdp, mcfg);
-
-	printk(BIOS_DEBUG, "ACPI:    * SRAT\n");
-	srat = (acpi_srat_t *) current;
-	acpi_create_srat(srat);
-	current += srat->header.length;
-	acpi_add_table(rsdp, srat);
-
-	/* SLIT */
-        printk(BIOS_DEBUG, "ACPI:    * SLIT\n");
-        slit = (acpi_slit_t *) current;
-        acpi_create_slit(slit);
-        current+=slit->header.length;
-        acpi_add_table(rsdp,slit);
-
-	/* SSDT */
-	printk(BIOS_DEBUG, "ACPI:    * SSDT\n");
-	ssdt = (acpi_header_t *)current;
-
-	acpi_create_ssdt_generator(ssdt, "DYNADATA");
-	current += ssdt->length;
-	acpi_add_table(rsdp, ssdt);
+	acpi_write_ssdt_generated(ssdt, rsdp, &current);
 
 	printk(BIOS_INFO, "ACPI: done.\n");
 	return current;

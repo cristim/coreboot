@@ -16,11 +16,6 @@
  */
 
 /*
- * Each system port implementing ACPI has to provide two functions:
- *
- *   write_acpi_tables()
- *   acpi_dump_apics()
- *
  * See Kontron 986LCD-M port for a good example of an ACPI implementation
  * in coreboot.
  */
@@ -464,6 +459,101 @@ void acpi_write_rsdp(acpi_rsdp_t *rsdp, acpi_rsdt_t *rsdt, acpi_xsdt_t *xsdt)
 	rsdp->checksum = acpi_checksum((void *)rsdp, 20);
 	rsdp->ext_checksum = acpi_checksum((void *)rsdp, sizeof(acpi_rsdp_t));
 }
+
+
+
+void acpi_write_dsdt(acpi_header_t *dsdt, const unsigned char AmlCode[], unsigned long *current)
+{
+        *current = ALIGN(*current, 64);
+        printk(BIOS_DEBUG, "ACPI:    * DSDT at %lx\n", *current);
+        dsdt = (acpi_header_t *) *current; // it will used by fadt
+        memcpy(dsdt, &AmlCode, sizeof(acpi_header_t));
+        *current += dsdt->length;
+        memcpy(dsdt, &AmlCode, dsdt->length);
+        printk(BIOS_DEBUG, "ACPI:    * DSDT @ %p Length %x\n",dsdt,dsdt->length);
+}
+
+void acpi_write_facs(acpi_facs_t *facs, unsigned long *current)
+{
+	/* FACS */ // it needs 64 bit alignment
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:       * FACS at %lx\n", *current);
+	facs = (acpi_facs_t *) *current; // it will be used by fadt
+	*current += sizeof(acpi_facs_t);
+	acpi_create_facs(facs);
+}
+
+
+void acpi_write_fadt(acpi_fadt_t *fadt, acpi_facs_t *facs, acpi_header_t *dsdt, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:    * FADT at %lx\n", *current);
+	fadt = (acpi_fadt_t *) *current;
+	*current += sizeof(acpi_fadt_t);
+	acpi_create_fadt(fadt, facs, dsdt);
+	acpi_add_table(rsdp, fadt);
+}
+
+void acpi_write_hpet(acpi_hpet_t *hpet, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:    * HPET at %lx\n", *current);
+	hpet = (acpi_hpet_t *) *current;
+	*current += sizeof(acpi_hpet_t);
+	acpi_create_hpet(hpet);
+	acpi_add_table(rsdp, hpet);
+}
+
+void acpi_write_madt(acpi_madt_t *madt, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:    * MADT at %lx\n", *current);
+	madt = (acpi_madt_t *) *current;
+	acpi_create_madt(madt);
+	*current += madt->header.length;
+	acpi_add_table(rsdp, madt);
+}
+
+void acpi_write_srat(acpi_srat_t *srat, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:    * SRAT at %lx\n", *current);
+	srat = (acpi_srat_t *) *current;
+	acpi_create_srat(srat);
+	*current += srat->header.length;
+	acpi_add_table(rsdp, srat);
+}
+
+void acpi_write_slit(acpi_slit_t *slit, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:   * SLIT at %lx\n", *current);
+	slit = (acpi_slit_t *) *current;
+	acpi_create_slit(slit);
+	*current += slit->header.length;
+	acpi_add_table(rsdp, slit);
+}
+void acpi_write_mcfg(acpi_mcfg_t *mcfg, acpi_rsdp_t *rsdp, unsigned long *current)
+{
+	*current = ALIGN(*current, 64);
+	printk(BIOS_DEBUG, "ACPI:    * MCFG at %lx\n", *current);
+	mcfg = (acpi_mcfg_t *) *current;
+	acpi_create_mcfg(mcfg);
+	*current += mcfg->header.length;
+	acpi_add_table(rsdp, mcfg);
+}
+
+void acpi_write_ssdt_generated(acpi_header_t *ssdt, acpi_rsdp_t *rsdp,  unsigned long *current)
+{
+	printk(BIOS_DEBUG, "ACPI:    * SSDT\n");
+	ssdt = (acpi_header_t *) *current;
+
+	acpi_create_ssdt_generator(ssdt, "DYNADATA");
+	*current += ssdt->length;
+	acpi_add_table(rsdp, ssdt);
+
+}
+
 
 #if CONFIG_HAVE_ACPI_RESUME == 1
 void suspend_resume(void)
