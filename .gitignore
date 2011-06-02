@@ -1,0 +1,8 @@
+.*
+*.o
+build*
+util/crossgcc/*-*
+util/crossgcc/tarballs/
+util/crossgcc/xgcc/
+payloads/external/SeaBIOS/seabios/
+util/cbfstool/cbfstool
